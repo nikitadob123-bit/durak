@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f3d2e">
+<title>Дурак онлайн — подключение</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='10' y='4' width='44' height='56' rx='6' fill='%23fff' stroke='%23333' stroke-width='3'/%3E%3Ctext x='32' y='44' font-size='30' text-anchor='middle' fill='%23c62828'%3E%E2%99%A5%3C/text%3E%3C/svg%3E">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: #f3f7f4;
+    background: radial-gradient(ellipse at 50% 35%, #187a55 0%, #0f5a3f 45%, #0a3d2b 100%) fixed;
+    display: grid; place-items: center; text-align: center; padding: 24px;
+  }
+  .box { max-width: 360px; width: 100%; }
+  .cards { font-size: 46px; letter-spacing: -6px; margin-bottom: 8px; }
+  .cards span { display: inline-block; background: #fffdf7; border-radius: 8px; width: 46px; height: 64px; line-height: 64px; margin: 0 2px; box-shadow: 0 3px 8px rgba(0,0,0,.35); letter-spacing: 0; font-size: 34px; }
+  .r { color: #c62828; } .b { color: #1b1b1b; }
+  .cards span:nth-child(1) { transform: rotate(-12deg) translateY(4px); }
+  .cards span:nth-child(3) { transform: rotate(12deg) translateY(4px); }
+  h1 { font-size: 30px; margin: 10px 0 4px; }
+  #msg { font-size: 17px; color: #dcebe3; min-height: 1.4em; }
+  #sub { font-size: 14px; color: #a8c5b8; margin-top: 8px; min-height: 1.2em; }
+  .spin { width: 34px; height: 34px; border: 4px solid rgba(255,255,255,.2); border-top-color: #ffd166; border-radius: 50%; margin: 18px auto; animation: s 1s linear infinite; }
+  @keyframes s { to { transform: rotate(360deg); } }
+  button { margin-top: 18px; border: 0; border-radius: 12px; padding: 14px 22px; font: 600 17px inherit; font-family: inherit; background: linear-gradient(#ffd166, #f4a91f); color: #2a1a00; box-shadow: 0 3px 0 rgba(0,0,0,.25); cursor: pointer; width: 100%; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<div class="box">
+  <div class="cards"><span class="r">♥</span><span class="b">♠</span><span class="r">♦</span></div>
+  <h1>Дурак онлайн</h1>
+  <div id="spin" class="spin"></div>
+  <div id="msg">Подключаю к игре…</div>
+  <div id="sub"></div>
+  <button id="retry" class="hidden">Попробовать ещё раз</button>
+</div>
+<script>
+(function () {
+  'use strict';
+  // Эта страница — постоянная ссылка. Адрес игрового сервера меняется (временный туннель),
+  // актуальный хранится в url.json и обновляется автоматически.
+  var OWNER = 'nikitadob123-bit';
+  var REPO = location.pathname.split('/').filter(Boolean)[0] || 'durak';
+  var msg = document.getElementById('msg');
+  var sub = document.getElementById('sub');
+  var spin = document.getElementById('spin');
+  var retry = document.getElementById('retry');
+  var MAX_ATTEMPTS = 12; // ~1 минута ожидания, пока сервер переподключается
+
+  function timeout(ms, p) {
+    return new Promise(function (resolve, reject) {
+      var t = setTimeout(function () { reject(new Error('timeout')); }, ms);
+      p.then(function (v) { clearTimeout(t); resolve(v); }, function (e) { clearTimeout(t); reject(e); });
+    });
+  }
+  function clean(u) {
+    if (typeof u !== 'string' || !/^https:\/\/[a-z0-9.-]+(:\d+)?\/?$/i.test(u)) return null;
+    return u.replace(/\/+$/, '');
+  }
+  // Источник 1: url.json на Pages (может отставать на минуту-две после обновления)
+  function fromPages() {
+    return timeout(8000, fetch('url.json?t=' + Date.now(), { cache: 'no-store' }))
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (j) { return clean(j.url); });
+  }
+  // Источник 2: тот же файл через GitHub API — обновляется сразу после коммита
+  function fromApi() {
+    return timeout(8000, fetch('https://api.github.com/repos/' + OWNER + '/' + REPO + '/contents/url.json?ref=main&t=' + Date.now(), { cache: 'no-store', headers: { Accept: 'application/vnd.github.raw+json' } }))
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (j) { return clean(j.url); });
+  }
+  // Сервер жив? (/health отвечает с CORS; мёртвый туннель отдаёт 502 «no tunnel»)
+  function alive(base) {
+    return timeout(9000, fetch(base + '/health?t=' + Date.now(), { cache: 'no-store' }))
+      .then(function (r) { if (!r.ok) return false; return r.json().then(function (j) { return !!(j && j.ok); }); })
+      .catch(function () { return false; });
+  }
+  function go(base) {
+    msg.textContent = 'Открываю игру…';
+    location.replace(base + '/' + location.search + location.hash);
+  }
+  function fail(text) {
+    spin.classList.add('hidden');
+    msg.textContent = text;
+    sub.textContent = 'Сервер игры сейчас недоступен или переподключается. Подождите минуту и попробуйте снова.';
+    retry.classList.remove('hidden');
+  }
+  var tried = {};
+  function attempt(n) {
+    spin.classList.remove('hidden');
+    retry.classList.add('hidden');
+    msg.textContent = n === 0 ? 'Подключаю к игре…' : 'Сервер переподключается, ждём…';
+    sub.textContent = n ? 'Попытка ' + (n + 1) + ' из ' + MAX_ATTEMPTS : '';
+    var sources = [fromPages, fromApi];
+    var found = false;
+    var anyUrl = false;
+    function next(i) {
+      if (i >= sources.length) {
+        if (n + 1 < MAX_ATTEMPTS) return setTimeout(function () { attempt(n + 1); }, 5000);
+        return fail(anyUrl ? 'Не удалось достучаться до сервера игры' : 'Не удалось узнать адрес сервера игры');
+      }
+      sources[i]().then(function (base) {
+        if (!base) return next(i + 1);
+        anyUrl = true;
+        if (tried[base] === n) return next(i + 1); // этот адрес уже проверили в этой попытке
+        tried[base] = n;
+        return alive(base).then(function (ok) { if (ok && !found) { found = true; go(base); } else next(i + 1); });
+      }).catch(function () { next(i + 1); });
+    }
+    next(0);
+  }
+  retry.onclick = function () { tried = {}; attempt(0); };
+  attempt(0);
+})();
+</script>
+</body>
+</html>
