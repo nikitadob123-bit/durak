@@ -1,0 +1,19 @@
+name: keepalive
+# Раз в день дёргаем базу Supabase, чтобы бесплатный проект не «уснул» (пауза после 7 дней без активности).
+on:
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase
+        env:
+          # публичный (publishable) ключ клиента — тот же, что в config.js
+          SUPABASE_URL: https://kmbstzqalpffeeeqtfem.supabase.co
+          SUPABASE_KEY: sb_publishable_rQ56GuMU6fThTIoe_kG8_A_KTzCLxwA
+        run: |
+          curl -fsS -X POST "$SUPABASE_URL/rest/v1/rpc/durak_keepalive" \
+            -H "apikey: $SUPABASE_KEY" -H "Authorization: Bearer $SUPABASE_KEY" \
+            -H "Content-Type: application/json" -d '{}'

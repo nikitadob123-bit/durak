@@ -1,0 +1,1 @@
+window.DURAK_CONFIG = {"transport":"supabase","url":"https://kmbstzqalpffeeeqtfem.supabase.co","key":"sb_publishable_rQ56GuMU6fThTIoe_kG8_A_KTzCLxwA","shareBase":"https://nikitadob123-bit.github.io/durak/","keepalive":"durak_keepalive","version":"1.0.0","build":"2026-10-06 16:17"};

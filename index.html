@@ -2,140 +2,167 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="theme-color" content="#0f3d2e">
-<title>Дурак онлайн — подключение</title>
+<title>Дурак онлайн</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='10' y='4' width='44' height='56' rx='6' fill='%23fff' stroke='%23333' stroke-width='3'/%3E%3Ctext x='32' y='44' font-size='30' text-anchor='middle' fill='%23c62828'%3E%E2%99%A5%3C/text%3E%3C/svg%3E">
-<style>
-  * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; }
-  body {
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: #f3f7f4;
-    background: radial-gradient(ellipse at 50% 35%, #187a55 0%, #0f5a3f 45%, #0a3d2b 100%) fixed;
-    display: grid; place-items: center; text-align: center; padding: 24px;
-  }
-  .box { max-width: 360px; width: 100%; }
-  .cards { font-size: 46px; letter-spacing: -6px; margin-bottom: 8px; }
-  .cards span { display: inline-block; background: #fffdf7; border-radius: 8px; width: 46px; height: 64px; line-height: 64px; margin: 0 2px; box-shadow: 0 3px 8px rgba(0,0,0,.35); letter-spacing: 0; font-size: 34px; }
-  .r { color: #c62828; } .b { color: #1b1b1b; }
-  .cards span:nth-child(1) { transform: rotate(-12deg) translateY(4px); }
-  .cards span:nth-child(3) { transform: rotate(12deg) translateY(4px); }
-  h1 { font-size: 30px; margin: 10px 0 4px; }
-  #msg { font-size: 17px; color: #dcebe3; min-height: 1.4em; }
-  #sub { font-size: 14px; color: #a8c5b8; margin-top: 8px; min-height: 1.2em; }
-  .spin { width: 34px; height: 34px; border: 4px solid rgba(255,255,255,.2); border-top-color: #ffd166; border-radius: 50%; margin: 18px auto; animation: s 1s linear infinite; }
-  @keyframes s { to { transform: rotate(360deg); } }
-  button { margin-top: 18px; border: 0; border-radius: 12px; padding: 14px 22px; font: 600 17px inherit; font-family: inherit; background: linear-gradient(#ffd166, #f4a91f); color: #2a1a00; box-shadow: 0 3px 0 rgba(0,0,0,.25); cursor: pointer; width: 100%; }
-  .hidden { display: none; }
-</style>
+<link rel="stylesheet" href="style.css?v=muwvtxyk">
+<link rel="preconnect" href="https://kmbstzqalpffeeeqtfem.supabase.co" crossorigin>
 </head>
 <body>
-<div class="box">
-  <div class="cards"><span class="r">♥</span><span class="b">♠</span><span class="r">♦</span></div>
-  <h1>Дурак онлайн</h1>
-  <div id="spin" class="spin"></div>
-  <div id="msg">Подключаю к игре…</div>
-  <div id="sub"></div>
-  <button id="retry" class="hidden">Попробовать ещё раз</button>
-</div>
-<script>
-(function () {
-  'use strict';
-  // Эта страница — постоянная ссылка. Адрес игрового сервера меняется (временный туннель),
-  // актуальный хранится в url.json и обновляется автоматически.
-  var OWNER = 'nikitadob123-bit';
-  var REPO = location.pathname.split('/').filter(Boolean)[0] || 'durak';
-  var msg = document.getElementById('msg');
-  var sub = document.getElementById('sub');
-  var spin = document.getElementById('spin');
-  var retry = document.getElementById('retry');
-  var MAX_ATTEMPTS = 36; // ~3 минуты ожидания, пока сервер переподключается
+<div id="app">
 
-  function timeout(ms, p) {
-    return new Promise(function (resolve, reject) {
-      var t = setTimeout(function () { reject(new Error('timeout')); }, ms);
-      p.then(function (v) { clearTimeout(t); resolve(v); }, function (e) { clearTimeout(t); reject(e); });
-    });
-  }
-  // {url, permanent}: permanent — постоянный хостинг (например, HF Space): переходим даже если /health молчит
-  // (спящий Space просыпается при заходе на него)
-  function info(j) {
-    var u = clean(j && j.url);
-    return u ? { url: u, permanent: !!j.permanent } : null;
-  }
-  function clean(u) {
-    if (typeof u !== 'string' || !/^https:\/\/[a-z0-9.-]+(:\d+)?\/?$/i.test(u)) return null;
-    return u.replace(/\/+$/, '');
-  }
-  // Источник 1: url.json напрямую из репозитория (raw) — свежий сразу после коммита
-  function fromRaw() {
-    return timeout(8000, fetch('https://raw.githubusercontent.com/' + OWNER + '/' + REPO + '/main/url.json?t=' + Date.now(), { cache: 'no-store' }))
-      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-      .then(info);
-  }
-  // Источник 2: url.json на Pages (может отставать на минуту-две после обновления)
-  function fromPages() {
-    return timeout(8000, fetch('url.json?t=' + Date.now(), { cache: 'no-store' }))
-      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-      .then(info);
-  }
-  // Источник 3: тот же файл через GitHub API — обновляется сразу после коммита
-  function fromApi() {
-    return timeout(8000, fetch('https://api.github.com/repos/' + OWNER + '/' + REPO + '/contents/url.json?ref=main&t=' + Date.now(), { cache: 'no-store', headers: { Accept: 'application/vnd.github.raw+json' } }))
-      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-      .then(info);
-  }
-  // Сервер жив? (/health отвечает с CORS; мёртвый туннель отдаёт 502 «no tunnel»)
-  function alive(base) {
-    return timeout(9000, fetch(base + '/health?t=' + Date.now(), { cache: 'no-store' }))
-      .then(function (r) { if (!r.ok) return false; return r.json().then(function (j) { return !!(j && j.ok); }); })
-      .catch(function () { return false; });
-  }
-  function go(base) {
-    msg.textContent = 'Открываю игру…';
-    location.replace(base + '/' + location.search + location.hash);
-  }
-  function fail(text) {
-    spin.classList.add('hidden');
-    msg.textContent = text;
-    sub.textContent = 'Сервер игры сейчас недоступен или переподключается. Подождите минуту и попробуйте снова.';
-    retry.classList.remove('hidden');
-  }
-  var tried = {};
-  function attempt(n) {
-    spin.classList.remove('hidden');
-    retry.classList.add('hidden');
-    msg.textContent = n === 0 ? 'Подключаю к игре…' : 'Сервер переподключается, ждём…';
-    sub.textContent = n ? 'Попытка ' + (n + 1) + ' из ' + MAX_ATTEMPTS : '';
-    var sources = [fromRaw, fromPages, fromApi];
-    var found = false;
-    var anyUrl = false;
-    function next(i) {
-      if (i >= sources.length) {
-        if (n + 1 < MAX_ATTEMPTS) return setTimeout(function () { attempt(n + 1); }, 5000);
-        return fail(anyUrl ? 'Не удалось достучаться до сервера игры' : 'Не удалось узнать адрес сервера игры');
-      }
-      sources[i]().then(function (it) {
-        if (!it) return next(i + 1);
-        var base = it.url;
-        anyUrl = true;
-        if (it.permanent) {
-          if (found) return;
-          found = true;
-          msg.textContent = 'Открываю игру…';
-          // короткая проверка; если сервер спит или молчит — всё равно переходим
-          return timeout(4000, alive(base)).then(function () { go(base); }, function () { go(base); });
-        }
-        if (tried[base] === n) return next(i + 1); // этот адрес уже проверили в этой попытке
-        tried[base] = n;
-        return alive(base).then(function (ok) { if (ok && !found) { found = true; go(base); } else next(i + 1); });
-      }).catch(function () { next(i + 1); });
-    }
-    next(0);
-  }
-  retry.onclick = function () { tried = {}; attempt(0); };
-  attempt(0);
-})();
-</script>
+  <!-- Главный экран -->
+  <section id="screen-home" class="screen active">
+    <div class="home-wrap">
+      <div class="logo">
+        <div class="logo-cards">
+          <div class="card mini red tilt-l"><div class="corner tl"><b>Т</b><i>♥</i></div><div class="pip">♥</div></div>
+          <div class="card mini black"><div class="corner tl"><b>Т</b><i>♠</i></div><div class="pip">♠</div></div>
+          <div class="card mini red tilt-r"><div class="corner tl"><b>Т</b><i>♦</i></div><div class="pip">♦</div></div>
+        </div>
+        <h1>Дурак <span>онлайн</span></h1>
+      </div>
+      <label class="field">
+        <span>Ваше имя</span>
+        <input id="inp-name" maxlength="16" autocomplete="nickname" placeholder="Например, Никита">
+      </label>
+      <div id="join-invite" class="invite hidden">
+        <p>Вас пригласили в комнату <b id="invite-code"></b></p>
+        <button id="btn-join-invite" class="btn primary big">Войти в комнату</button>
+      </div>
+      <button id="btn-create" class="btn primary big">Создать комнату</button>
+      <div class="join-row">
+        <input id="inp-code" maxlength="6" placeholder="Код комнаты" autocapitalize="characters" autocomplete="off">
+        <button id="btn-join" class="btn">Войти</button>
+      </div>
+      <p id="home-err" class="err"></p>
+      <details class="help">
+        <summary>Как играть</summary>
+        <div class="help-body">
+          <p>Цель — избавиться от всех карт. Кто остался с картами последним — <b>дурак</b>.</p>
+          <p><b>Атака:</b> выберите карту и нажмите на неё ещё раз (или на стол). Подкидывать можно карты тех же достоинств, что уже лежат на столе (не больше 6 и не больше, чем карт у отбивающегося).</p>
+          <p><b>Защита:</b> выберите карту, затем нажмите на карту на столе, которую хотите побить. Бьёт старшая карта той же масти или козырь. Не можете — <b>«Беру»</b>.</p>
+          <p><b>Переводной:</b> пока ничего не отбито, можно перевести атаку следующему игроку картой того же достоинства — кнопка <b>«Перевести»</b>.</p>
+          <p><b>«Бито»</b> — атакующий закончил подкидывать, <b>«Пас»</b> — не подкидываю, пока соперник берёт.</p>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <!-- Лобби комнаты -->
+  <section id="screen-lobby" class="screen">
+    <div class="lobby-wrap">
+      <header class="lobby-head">
+        <button id="btn-lobby-leave" class="btn ghost small">← Выйти</button>
+        <div class="room-code-box">Комната <b id="lobby-code"></b></div>
+      </header>
+      <div class="share">
+        <div class="share-link" id="share-link"></div>
+        <div class="share-btns">
+          <button id="btn-copy" class="btn small">Копировать ссылку</button>
+          <button id="btn-share" class="btn small">Поделиться</button>
+        </div>
+      </div>
+      <h3>Игроки <span id="lobby-count"></span></h3>
+      <ol id="lobby-players" class="players"></ol>
+      <div class="settings" id="lobby-settings">
+        <div class="set-row">
+          <span>Режим</span>
+          <div class="seg" data-key="mode">
+            <button data-val="podkidnoy">Подкидной</button>
+            <button data-val="perevodnoy">Переводной</button>
+          </div>
+        </div>
+        <div class="set-row">
+          <span>Колода</span>
+          <div class="seg" data-key="deckSize">
+            <button data-val="24">24</button>
+            <button data-val="36">36</button>
+            <button data-val="52">52</button>
+          </div>
+        </div>
+        <div class="set-row">
+          <span>Подкидывают</span>
+          <div class="seg" data-key="throwIn">
+            <button data-val="all">все</button>
+            <button data-val="neighbors">соседи</button>
+          </div>
+        </div>
+      </div>
+      <div class="lobby-actions">
+        <button id="btn-add-bot" class="btn">🤖 Добавить бота</button>
+        <button id="btn-start" class="btn primary big">Начать игру</button>
+        <p id="lobby-wait" class="muted">Ждём, пока хозяин комнаты начнёт игру…</p>
+      </div>
+      <p id="lobby-err" class="err"></p>
+    </div>
+  </section>
+
+  <!-- Игра -->
+  <section id="screen-game" class="screen">
+    <header class="topbar">
+      <button id="btn-menu" class="icon-btn" aria-label="Меню">☰</button>
+      <div class="top-info"><span id="top-mode"></span> · <span id="top-code"></span></div>
+      <button id="btn-chat" class="icon-btn" aria-label="Чат">💬<span id="chat-badge" class="badge hidden"></span></button>
+    </header>
+    <div id="opponents"></div>
+    <div id="center">
+      <div class="info-row">
+        <div id="deck-area" class="deck-area"></div>
+        <div id="status" class="status"></div>
+        <div id="discard-area" class="discard-area"></div>
+      </div>
+      <div id="table" class="table"></div>
+      <div id="toasts"></div>
+    </div>
+    <div id="actions" class="actions"></div>
+    <div id="me-bar" class="me-bar"></div>
+    <div id="hand" class="hand"></div>
+  </section>
+
+  <!-- Оверлей результата -->
+  <div id="result" class="overlay hidden">
+    <div class="result-box">
+      <div id="result-title" class="result-title"></div>
+      <ol id="result-list"></ol>
+      <div class="result-btns">
+        <button id="btn-again" class="btn primary big">Сыграть ещё</button>
+        <button id="btn-to-lobby" class="btn">В лобби</button>
+        <button id="btn-result-close" class="btn ghost">Посмотреть стол</button>
+        <p id="result-wait" class="muted">Хозяин может начать новую партию</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Меню -->
+  <div id="menu" class="overlay hidden">
+    <div class="menu-box">
+      <h3>Меню</h3>
+      <label class="toggle"><input type="checkbox" id="opt-quick"> Ходить одним касанием</label>
+      <label class="toggle"><input type="checkbox" id="opt-sound" checked> Вибрация при моём ходе</label>
+      <button id="btn-copy2" class="btn">Копировать ссылку на комнату</button>
+      <button id="btn-leave" class="btn danger">Выйти из комнаты</button>
+      <button id="btn-menu-close" class="btn ghost">Закрыть</button>
+    </div>
+  </div>
+
+  <!-- Чат -->
+  <div id="chat" class="chat hidden">
+    <div class="chat-head"><b>Чат</b><button id="btn-chat-close" class="icon-btn">✕</button></div>
+    <div id="chat-list" class="chat-list"></div>
+    <div id="emote-bar" class="emote-bar"></div>
+    <form id="chat-form" class="chat-form">
+      <input id="chat-input" maxlength="200" placeholder="Сообщение…" autocomplete="off">
+      <button class="btn small primary">➤</button>
+    </form>
+  </div>
+
+  <div id="conn" class="conn hidden">Соединение потеряно… переподключаемся</div>
+  <div id="flash" class="flash hidden"></div>
+</div>
+<div id="pause" class="pause hidden"><div class="pause-box"><div class="spinner"></div><div id="pause-text">Ждём хозяина…</div><button id="btn-pause-leave" class="btn ghost small">Выйти из комнаты</button></div></div>
+<script src="config.js?v=muwvtxyk"></script>
+<script src="app.js?v=muwvtxyk"></script>
 </body>
 </html>
