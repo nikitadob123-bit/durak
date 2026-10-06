@@ -49,7 +49,7 @@
   var sub = document.getElementById('sub');
   var spin = document.getElementById('spin');
   var retry = document.getElementById('retry');
-  var MAX_ATTEMPTS = 12; // ~1 минута ожидания, пока сервер переподключается
+  var MAX_ATTEMPTS = 36; // ~3 минуты ожидания, пока сервер переподключается
 
   function timeout(ms, p) {
     return new Promise(function (resolve, reject) {
@@ -61,13 +61,19 @@
     if (typeof u !== 'string' || !/^https:\/\/[a-z0-9.-]+(:\d+)?\/?$/i.test(u)) return null;
     return u.replace(/\/+$/, '');
   }
-  // Источник 1: url.json на Pages (может отставать на минуту-две после обновления)
+  // Источник 1: url.json напрямую из репозитория (raw) — свежий сразу после коммита
+  function fromRaw() {
+    return timeout(8000, fetch('https://raw.githubusercontent.com/' + OWNER + '/' + REPO + '/main/url.json?t=' + Date.now(), { cache: 'no-store' }))
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (j) { return clean(j.url); });
+  }
+  // Источник 2: url.json на Pages (может отставать на минуту-две после обновления)
   function fromPages() {
     return timeout(8000, fetch('url.json?t=' + Date.now(), { cache: 'no-store' }))
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function (j) { return clean(j.url); });
   }
-  // Источник 2: тот же файл через GitHub API — обновляется сразу после коммита
+  // Источник 3: тот же файл через GitHub API — обновляется сразу после коммита
   function fromApi() {
     return timeout(8000, fetch('https://api.github.com/repos/' + OWNER + '/' + REPO + '/contents/url.json?ref=main&t=' + Date.now(), { cache: 'no-store', headers: { Accept: 'application/vnd.github.raw+json' } }))
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
@@ -95,7 +101,7 @@
     retry.classList.add('hidden');
     msg.textContent = n === 0 ? 'Подключаю к игре…' : 'Сервер переподключается, ждём…';
     sub.textContent = n ? 'Попытка ' + (n + 1) + ' из ' + MAX_ATTEMPTS : '';
-    var sources = [fromPages, fromApi];
+    var sources = [fromRaw, fromPages, fromApi];
     var found = false;
     var anyUrl = false;
     function next(i) {
